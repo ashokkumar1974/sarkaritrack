@@ -1,0 +1,246 @@
+/* ============================================================
+   apps/web/src/app/globals.css
+   Base Tailwind + custom global styles
+   ============================================================ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── CSS Variables ── */
+:root {
+  --font-inter: "Inter", system-ui, sans-serif;
+  --color-brand: #2563EB;
+  --color-brand-dark: #1D4ED8;
+  --color-surface: #F7F8FC;
+  --color-surface-dark: #0F172A;
+}
+
+/* ── Base resets ── */
+@layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-[#F7F8FC] text-gray-900 font-sans;
+    min-height: 100dvh;
+  }
+
+  /* Focus ring — accessible but not intrusive */
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-blue-500;
+  }
+
+  /* Remove default button styles */
+  button {
+    cursor: pointer;
+  }
+
+  /* Smooth image rendering */
+  img, video {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* Remove list styles where needed */
+  ul[role="list"],
+  ol[role="list"] {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Better table defaults */
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  /* Hide scrollbar but keep scroll functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Custom thin scrollbar */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: #CBD5E1 transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: #CBD5E1;
+    border-radius: 2px;
+  }
+}
+
+/* ── Component layer ── */
+@layer components {
+
+  /* Prose overrides for job descriptions */
+  .prose-job {
+    @apply prose prose-sm max-w-none text-gray-700;
+  }
+  .prose-job h2 {
+    @apply text-base font-bold text-gray-900 mt-5 mb-2;
+  }
+  .prose-job h3 {
+    @apply text-sm font-bold text-gray-800 mt-4 mb-1.5;
+  }
+  .prose-job ul {
+    @apply list-disc pl-5 space-y-1;
+  }
+  .prose-job li {
+    @apply text-sm text-gray-700;
+  }
+  .prose-job table {
+    @apply text-xs border border-gray-200 rounded-lg overflow-hidden;
+  }
+  .prose-job th {
+    @apply bg-gray-50 font-semibold text-gray-600 px-3 py-2 text-left border-b border-gray-200;
+  }
+  .prose-job td {
+    @apply px-3 py-2 border-b border-gray-100 text-gray-700;
+  }
+  .prose-job a {
+    @apply text-blue-600 hover:underline;
+  }
+
+  /* Card base */
+  .card {
+    @apply bg-white rounded-2xl border border-gray-200 shadow-sm;
+  }
+
+  /* Section heading */
+  .section-title {
+    @apply text-xl font-extrabold text-gray-900;
+  }
+
+  /* Status badge base */
+  .status-badge {
+    @apply inline-flex items-center gap-1 text-xs font-semibold border px-2.5 py-0.5 rounded-full;
+  }
+
+  /* Admin dark card */
+  .admin-card {
+    @apply bg-[#1E293B] rounded-xl border border-white/10;
+  }
+
+  /* Link hover effect */
+  .hover-link {
+    @apply text-blue-600 hover:text-blue-800 hover:underline transition-colors;
+  }
+
+  /* Mobile safe area padding (for bottom sticky bars) */
+  .pb-safe {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+}
+
+/* ── Utility layer ── */
+@layer utilities {
+  /* Truncate multiple lines */
+  .line-clamp-1  { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1;  -webkit-box-orient: vertical; }
+  .line-clamp-2  { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2;  -webkit-box-orient: vertical; }
+  .line-clamp-3  { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3;  -webkit-box-orient: vertical; }
+
+  /* Tabular nums for data */
+  .num { @apply tabular-nums font-variant-numeric: tabular-nums; }
+
+  /* Glass effect */
+  .glass {
+    backdrop-filter: blur(12px) saturate(180%);
+    background-color: rgba(255, 255, 255, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+  }
+  .glass-dark {
+    backdrop-filter: blur(12px) saturate(180%);
+    background-color: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  /* Gradient text */
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-violet-600;
+  }
+
+  /* Animated pulse dot */
+  .live-dot::before {
+    content: "";
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: pulse 1.5s ease-in-out infinite;
+    margin-right: 6px;
+  }
+}
+
+/* ── Keyframe animations ── */
+@keyframes marquee {
+  0%   { transform: translateX(100vw); }
+  100% { transform: translateX(-100%); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* ── Skeleton shimmer ── */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    #f0f0f0 25%,
+    #e0e0e0 50%,
+    #f0f0f0 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 6px;
+}
+
+/* ── Print styles ── */
+@media print {
+  header, footer, nav, aside, .no-print { display: none !important; }
+  body { background: white; color: black; }
+  a { color: black; text-decoration: underline; }
+}
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

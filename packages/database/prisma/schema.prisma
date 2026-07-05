@@ -1,0 +1,424 @@
+// ============================================================
+// SarkariTrack — Master Prisma/PostgreSQL Database Schema
+// packages/database/prisma/schema.prisma
+// ============================================================
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearch", "fullTextIndex"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum JobStatus {
+  DRAFT
+  LIVE
+  CLOSING_SOON   // auto-set when deadline < 48h
+  CLOSED
+  ARCHIVED
+  RESULT_OUT
+}
+
+enum PostType {
+  ONLINE_FORM
+  ADMIT_CARD
+  RESULT
+  SYLLABUS
+  ANSWER_KEY
+  RECRUITMENT_NOTIFICATION
+}
+
+enum QualificationLevel {
+  CLASS_8
+  CLASS_10
+  CLASS_12
+  ITI
+  DIPLOMA
+  GRADUATE
+  POST_GRADUATE
+  BTECH
+  MBBS
+  LLB
+  CA
+  PHD
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum NotificationChannel {
+  WHATSAPP
+  TELEGRAM
+  WEB_PUSH
+  EMAIL
+}
+
+enum ScraperRunStatus {
+  RUNNING
+  SUCCESS
+  PARTIAL
+  FAILED
+  SKIPPED
+}
+
+enum LinkStatus {
+  OK
+  DOWN
+  REDIRECT
+  UNKNOWN
+}
+
+// ============================================================
+// CORE: JOB LISTINGS
+// ============================================================
+
+model Job {
+  id                    String           @id @default(cuid())
+  slug                  String           @unique
+  title                 String
+  shortTitle            String?          // for notifications (max 60 chars)
+  postType              PostType
+  status                JobStatus        @default(DRAFT)
+
+  // Organization
+  department            String           // "Railway Recruitment Board"
+  organizationCode      String?          // "RRB" for filtering
+  advertisementNo       String?
+  officialWebsite       String?
+
+  // Geography
+  stateId               String?
+  state                 State?           @relation(fields: [stateId], references: [id])
+  isNational            Boolean          @default(false)
+
+  // Vacancies
+  totalVacancies        Int?
+  vacancyBreakdown      Json?            // { "UR": 120, "OBC": 80, "SC": 60, "ST": 40, "EWS": 20 }
+  postWiseVacancies     Json?            // [{ "post": "Constable", "vacancies": 500 }, ...]
+
+  // Key Dates
+  notificationDate      DateTime?
+  applicationStartDate  DateTime?
+  applicationEndDate    DateTime?        // ← used for CLOSING_SOON logic
+  lastFeePaymentDate    DateTime?
+  examDate              DateTime?
+  admitCardDate         DateTime?
+  resultDate            DateTime?
+
+  // Fees
+  feeGeneral            Int?             // in INR
+  feeOBCEWS             Int?
+  feeSCSTFemale         Int?
+  feeExServiceman       Int?
+  feePaymentMode        String?          // "Online via SBI Collect / Debit Card / UPI"
+
+  // Age Criteria
+  ageMinYears           Int?
+  ageMaxYears           Int?
+  ageRelaxationJson     Json?            // { "OBC": 3, "SC/ST": 5, "PwD": 10, "ExServiceman": "As per rules" }
+  ageCutoffDate         DateTime?        // The reference date for age calculation
+
+  // Pay Scale
+  payScaleMin           Int?             // monthly, in INR
+  payScaleMax           Int?
+  payScaleText          String?          // "Level-7 (₹44,900 – ₹1,42,400)"
+  payBand               String?
+
+  // Qualifications (many-to-many)
+  qualifications        JobQualification[]
+
+  // Content
+  summaryHtml           String?          @db.Text   // AI-generated structured summary
+  fullDescriptionHtml   String?          @db.Text
+  selectionProcess      String?          // "Written Exam → Physical Test → Document Verification"
+  importantInstructions String?          @db.Text
+
+  // Files & Links
+  notificationPdfUrl    String?
+  applyOnlineUrl        String?
+  officialPortalUrl     String?
+  syllabusUrl           String?
+  previousPapersUrl     String?
+
+  // SEO
+  metaTitle             String?
+  metaDescription       String?          @db.VarChar(160)
+  canonicalUrl          String?
+  structuredDataJson    Json?            // Schema.org JobPosting JSON-LD
+  internalLinks         Json?            // [{ "text": "SSC CGL Syllabus", "url": "/jobs/ssc-cgl-syllabus" }]
+
+  // Source
+  sourceUrl             String?
+  scrapedFromRunId      String?
+  scrapeRun             ScrapeRun?       @relation(fields: [scrapedFromRunId], references: [id])
+  isManualEntry         Boolean          @default(false)
+  aiParseConfidence     Float?           // 0.0 – 1.0
+
+  // Monitoring
+  externalLinks         ExternalLink[]
+  viewCount             Int              @default(0)
+  applyClickCount       Int              @default(0)
+
+  // Relations
+  notifications         Notification[]
+  savedByUsers          SavedJob[]
+
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  publishedAt           DateTime?
+
+  @@index([status, postType])
+  @@index([applicationEndDate])
+  @@index([stateId])
+  @@index([isNational])
+  @@index([slug])
+  @@index([totalVacancies])
+  @@index([payScaleMax])
+}
+
+// ============================================================
+// GEOGRAPHY
+// ============================================================
+
+model State {
+  id            String  @id @default(cuid())
+  name          String  @unique           // "Uttar Pradesh"
+  slug          String  @unique           // "uttar-pradesh"
+  code          String  @unique           // "UP"
+  isUnionTerr   Boolean @default(false)
+  metaTitle     String?
+  metaDesc      String?
+  jobs          Job[]
+
+  @@index([slug])
+}
+
+// ============================================================
+// QUALIFICATIONS (Normalized)
+// ============================================================
+
+model Qualification {
+  id       String             @id @default(cuid())
+  level    QualificationLevel @unique
+  label    String             // "10th Pass / Matriculation"
+  slug     String             @unique  // "10th-pass"
+  jobs     JobQualification[]
+}
+
+model JobQualification {
+  jobId           String
+  qualificationId String
+  noteText        String?      // "Relevant trade from NCVT-recognized ITI"
+  job             Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  qualification   Qualification @relation(fields: [qualificationId], references: [id])
+
+  @@id([jobId, qualificationId])
+}
+
+// ============================================================
+// USERS & AUTH
+// ============================================================
+
+model User {
+  id                String         @id @default(cuid())
+  email             String?        @unique
+  phone             String?        @unique
+  name              String?
+  avatarUrl         String?
+
+  // Saved profile for eligibility engine
+  eligibilityProfile EligibilityProfile?
+  savedJobs          SavedJob[]
+  pushSubscriptions  PushSubscription[]
+  channelSubs        ChannelSubscription[]
+  toolUsageEvents    ToolEvent[]
+
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+}
+
+model EligibilityProfile {
+  id                String             @id @default(cuid())
+  userId            String             @unique
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  dateOfBirth       DateTime?
+  gender            Gender?
+  stateId           String?
+  category          String?            // "OBC", "SC", "ST", "EWS", "General"
+  qualifications    QualificationLevel[]
+  preferredStates   String[]           // state slugs
+
+  updatedAt         DateTime           @updatedAt
+}
+
+model SavedJob {
+  userId    String
+  jobId     String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@id([userId, jobId])
+}
+
+// ============================================================
+// PUSH & CHANNEL SUBSCRIPTIONS
+// ============================================================
+
+model PushSubscription {
+  id           String   @id @default(cuid())
+  userId       String?
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  endpoint     String   @unique
+  p256dhKey    String
+  authKey      String
+  userAgent    String?
+  createdAt    DateTime @default(now())
+}
+
+model ChannelSubscription {
+  id         String              @id @default(cuid())
+  userId     String?
+  user       User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  channel    NotificationChannel
+  externalId String              // Telegram chat_id, WhatsApp phone, etc.
+  isActive   Boolean             @default(true)
+  createdAt  DateTime            @default(now())
+
+  @@unique([channel, externalId])
+}
+
+// ============================================================
+// NOTIFICATIONS (Outbound Log)
+// ============================================================
+
+model Notification {
+  id          String              @id @default(cuid())
+  jobId       String
+  job         Job                 @relation(fields: [jobId], references: [id])
+  channel     NotificationChannel
+  payload     Json                // The exact message body sent
+  sentAt      DateTime?
+  deliveredAt DateTime?
+  failedAt    DateTime?
+  errorMsg    String?
+  retryCount  Int                 @default(0)
+
+  @@index([jobId])
+  @@index([channel, sentAt])
+}
+
+// ============================================================
+// AI SCRAPER PIPELINE
+// ============================================================
+
+model ScraperSource {
+  id           String      @id @default(cuid())
+  name         String      @unique   // "UPSC Official", "SSC Official", "Employment News"
+  slug         String      @unique
+  baseUrl      String
+  scraperClass String      // Python class name: "UPSCScraper"
+  isActive     Boolean     @default(true)
+  cronSchedule String      @default("0 6 * * *")  // Daily 6 AM
+  lastRunAt    DateTime?
+  runs         ScrapeRun[]
+
+  createdAt    DateTime    @default(now())
+}
+
+model ScrapeRun {
+  id              String           @id @default(cuid())
+  sourceId        String
+  source          ScraperSource    @relation(fields: [sourceId], references: [id])
+  status          ScraperRunStatus
+  startedAt       DateTime         @default(now())
+  finishedAt      DateTime?
+  jobsFound       Int              @default(0)
+  jobsCreated     Int              @default(0)
+  jobsUpdated     Int              @default(0)
+  jobsSkipped     Int              @default(0)
+  pdfsParsed      Int              @default(0)
+  errorLog        String?          @db.Text
+  rawOutputJson   Json?            // Full AI parse output for debugging
+  jobs            Job[]
+
+  @@index([sourceId, startedAt])
+}
+
+// ============================================================
+// EXTERNAL LINK MONITORING (Dead-Link Sentinel)
+// ============================================================
+
+model ExternalLink {
+  id            String     @id @default(cuid())
+  jobId         String
+  job           Job        @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  url           String
+  linkType      String     // "apply_online" | "notification_pdf" | "official_portal"
+  status        LinkStatus @default(UNKNOWN)
+  httpStatus    Int?
+  lastCheckedAt DateTime?
+  lastOkAt      DateTime?
+  downSince     DateTime?
+  checkCount    Int        @default(0)
+
+  @@unique([jobId, linkType])
+  @@index([status])
+  @@index([lastCheckedAt])
+}
+
+// ============================================================
+// TOOLS TELEMETRY
+// ============================================================
+
+model ToolEvent {
+  id         String   @id @default(cuid())
+  toolSlug   String   // "photo-signature-resizer" | "age-calculator" | "eligibility-engine"
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  sessionId  String?
+  inputJson  Json?    // Anonymized input params
+  outputJson Json?    // Anonymized output
+  durationMs Int?
+  createdAt  DateTime @default(now())
+
+  @@index([toolSlug, createdAt])
+}
+
+// ============================================================
+// REVENUE & ANALYTICS SNAPSHOT (daily aggregation)
+// ============================================================
+
+model RevenueSnapshot {
+  id              String   @id @default(cuid())
+  date            DateTime @unique @db.Date
+  adsenseRevenue  Float    @default(0)
+  affiliateClicks Int      @default(0)
+  affiliateRev    Float    @default(0)
+  pageViews       Int      @default(0)
+  uniqueVisitors  Int      @default(0)
+  newSubscribers  Int      @default(0)
+  topJobId        String?
+  createdAt       DateTime @default(now())
+}
+
+// ============================================================
+// SYSTEM SETTINGS (key-value config store)
+// ============================================================
+
+model SystemSetting {
+  key       String   @id
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
+}

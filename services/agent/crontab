@@ -1,0 +1,10 @@
+# SarkariTrack Agent Crontab (UTC times)
+# Scraper — daily 1:00 AM UTC (6:30 AM IST)
+0 1 * * * cd /app && python main.py --scraper all >> /var/log/scraper.log 2>&1
+# Dead-link sentinel — every hour
+0 * * * * cd /app && python sentinel/link_checker.py >> /var/log/sentinel.log 2>&1
+# Status sweep — every 30 min
+*/30 * * * * cd /app && python sentinel/status_updater.py >> /var/log/status.log 2>&1
+# Revenue snapshot — 11:30 PM UTC daily
+30 23 * * * curl -s -X POST http://api:8000/api/admin/revenue-snapshot -H "X-API-Key: ${INTERNAL_API_KEY}" >> /var/log/revenue.log 2>&1
+
