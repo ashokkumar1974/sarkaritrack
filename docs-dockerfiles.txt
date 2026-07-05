@@ -1,0 +1,176 @@
+# ============================================================
+# apps/web/Dockerfile
+# Next.js 14 production build (standalone output)
+# ============================================================
+# Stage 1: Dependencies
+FROM node:20-alpine AS deps
+RUN apk add --no-cache libc6-compat
+WORKDIR /app
+
+# Install pnpm
+RUN npm install -g pnpm@9
+
+# Copy workspace config
+COPY pnpm-workspace.yaml ./
+COPY package.json ./
+COPY turbo.json ./
+
+# Copy all package.json files for workspace awareness
+COPY apps/web/package.json ./apps/web/
+COPY packages/database/package.json ./packages/database/
+COPY packages/shared/package.json ./packages/shared/
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile
+
+# ─────────────────────────────────────────
+# Stage 2: Prisma generate
+FROM deps AS prisma
+WORKDIR /app
+COPY packages/database/prisma ./packages/database/prisma/
+RUN cd packages/database && npx prisma generate
+
+# ─────────────────────────────────────────
+# Stage 3: Build
+FROM node:20-alpine AS builder
+WORKDIR /app
+RUN npm install -g pnpm@9
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
+COPY --from=prisma /app/packages/database ./packages/database
+
+COPY . .
+
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_ENV=production
+
+RUN cd apps/web && pnpm build
+
+# ─────────────────────────────────────────
+# Stage 4: Runner
+FROM node:20-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser  --system --uid 1001 nextjs
+
+# Copy standalone output
+COPY --from=builder /app/apps/web/.next/standalone ./
+COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder /app/apps/web/public ./apps/web/public
+
+USER nextjs
+
+EXPOSE 3000
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
+CMD ["node", "apps/web/server.js"]
+
+
+# ============================================================
+# services/api/Dockerfile
+# FastAPI backend
+# ============================================================
+# --- paste as services/api/Dockerfile ---
+# FROM python:3.11-slim
+#
+# WORKDIR /app
+#
+# # Install system dependencies
+# RUN apt-get update && apt-get install -y \
+#     gcc \
+#     libpq-dev \
+#     && rm -rf /var/lib/apt/lists/*
+#
+# # Install Python dependencies
+# COPY requirements.txt .
+# RUN pip install --no-cache-dir -r requirements.txt
+#
+# # Copy source
+# COPY . .
+#
+# # Create non-root user
+# RUN useradd -m -u 1001 apiuser
+# USER apiuser
+#
+# EXPOSE 8000
+#
+# CMD ["uvicorn", "main:app", \
+#      "--host", "0.0.0.0", \
+#      "--port", "8000", \
+#      "--workers", "2", \
+#      "--log-level", "info"]
+#
+# Healthcheck
+# HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+#   CMD curl -f http://localhost:8000/health || exit 1
+
+
+# ============================================================
+# services/agent/Dockerfile
+# Python AI Agent (scraper + parser + sentinel)
+# ============================================================
+# --- paste as services/agent/Dockerfile ---
+# FROM python:3.11-slim
+#
+# WORKDIR /app
+#
+# # System deps for Playwright + pdfminer + pytesseract
+# RUN apt-get update && apt-get install -y \
+#     gcc \
+#     libpq-dev \
+#     tesseract-ocr \
+#     tesseract-ocr-hin \
+#     poppler-utils \
+#     curl \
+#     && rm -rf /var/lib/apt/lists/*
+#
+# # Python dependencies
+# COPY requirements.txt .
+# RUN pip install --no-cache-dir -r requirements.txt
+#
+# # Install Playwright browsers
+# RUN playwright install chromium --with-deps
+#
+# # Copy source
+# COPY . .
+#
+# # Install cron
+# RUN apt-get update && apt-get install -y cron && rm -rf /var/lib/apt/lists/*
+#
+# # Copy crontab
+# COPY crontab /etc/cron.d/sarkaritrack
+# RUN chmod 0644 /etc/cron.d/sarkaritrack
+# RUN crontab /etc/cron.d/sarkaritrack
+#
+# CMD ["cron", "-f"]
+
+
+# ============================================================
+# services/agent/crontab
+# Cron schedule for the agent container
+# ============================================================
+# --- paste as services/agent/crontab ---
+#
+# SarkariTrack Agent Crontab
+# All times in UTC (IST = UTC + 5:30)
+#
+# Scraper — daily at 1:00 AM UTC (6:30 AM IST)
+# 0 1 * * * cd /app && python main.py --scraper all >> /var/log/scraper.log 2>&1
+#
+# Dead-link sentinel — every hour
+# 0 * * * * cd /app && python sentinel/link_checker.py >> /var/log/sentinel.log 2>&1
+#
+# Status sweep (CLOSING_SOON / CLOSED) — every 30 min
+# */30 * * * * cd /app && python sentinel/status_updater.py >> /var/log/status.log 2>&1
+#
+# Revenue snapshot — daily at 11:30 PM UTC (5:00 AM IST next day)
+# 30 23 * * * curl -s -X POST http://api:8000/api/admin/revenue-snapshot \
+#             -H "X-API-Key: ${INTERNAL_API_KEY}" >> /var/log/revenue.log 2>&1
+#
+# (empty line required by cron)

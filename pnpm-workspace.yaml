@@ -1,0 +1,59 @@
+# ============================================================
+# pnpm-workspace.yaml — Monorepo workspace config
+# (root of sarkaritrack/)
+# ============================================================
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "services/*"
+
+
+# ============================================================
+# turbo.json — Turborepo pipeline config
+# (root of sarkaritrack/)
+# ============================================================
+# {
+#   "$schema": "https://turbo.build/schema.json",
+#   "globalDependencies": [".env"],
+#   "pipeline": {
+#     "build": {
+#       "dependsOn": ["^build"],
+#       "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+#     },
+#     "dev": {
+#       "cache": false,
+#       "persistent": true
+#     },
+#     "lint": { "outputs": [] },
+#     "type-check": { "outputs": [] },
+#     "db:generate": { "cache": false },
+#     "db:push":     { "cache": false },
+#     "db:seed":     { "cache": false }
+#   }
+# }
+
+
+# ============================================================
+# package.json (root) — workspace root scripts
+# ============================================================
+# {
+#   "name": "sarkaritrack",
+#   "private": true,
+#   "scripts": {
+#     "dev":          "turbo run dev",
+#     "build":        "turbo run build",
+#     "lint":         "turbo run lint",
+#     "type-check":   "turbo run type-check",
+#     "db:generate":  "cd packages/database && pnpm prisma generate",
+#     "db:migrate":   "cd packages/database && pnpm prisma migrate dev",
+#     "db:push":      "cd packages/database && pnpm prisma db push",
+#     "db:seed":      "cd packages/database && npx ts-node prisma/seed.ts",
+#     "db:studio":    "cd packages/database && pnpm prisma studio"
+#   },
+#   "devDependencies": {
+#     "turbo": "^2.x",
+#     "typescript": "^5.x",
+#     "@types/node": "^20.x"
+#   },
+#   "engines": { "node": ">=20", "pnpm": ">=8" }
+# }
